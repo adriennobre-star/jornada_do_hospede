@@ -1620,6 +1620,40 @@ const _origScroll=window.scrollTo.bind(window);
 window.scrollTo=function(o){ const a=document.getElementById('app'); if(a) a.scrollTop=0; };
 render();
 
+/* ===== abertura automática: vídeo toca sozinho + tela cheia no 1º toque ===== */
+(function(){
+  const css=document.createElement('style');
+  css.textContent=`body.cine #app,body.cine #app *{animation:none!important;transform:none!important;filter:none!important;backdrop-filter:none!important;perspective:none!important;will-change:auto!important;contain:none!important;overflow:visible!important;zoom:1!important}
+body.cine .slide.vid video{position:fixed!important;inset:0!important;width:100%!important;height:100%!important;z-index:9000;object-fit:contain;background:#000;border-radius:0}
+#fsHint{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:9500;font:700 15px/1.3 "Figtree",system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.6);padding:10px 18px;border-radius:999px;pointer-events:none;transition:opacity .5s}
+#fsHint.off{opacity:0}`;
+  document.head.appendChild(css);
+  const hint=document.createElement('div'); hint.id='fsHint'; hint.className='off';
+  hint.textContent='Clique ou aperte qualquer tecla para tela cheia com som';
+  document.body.appendChild(hint);
+  let armed=true;
+  const introVid=()=> (view==='intro'&&islide===0) ? app.querySelector('.slide.vid video') : null;
+  window._introVid=introVid;
+  function activate(e){
+    if(!armed) return; armed=false;
+    hint.classList.add('off');
+    if(e.type==='pointerdown') window._eatClick=true;
+    try{ if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{}); }catch(err){}
+    const v=introVid();
+    if(v){
+      e.preventDefault(); e.stopImmediatePropagation();   // 1º toque não avança o passador nem pausa o vídeo
+      v.muted=false; v.volume=1;
+      if(v.paused) v.play().catch(()=>{});
+      setTimeout(()=>{ if(v.paused) v.play().catch(()=>{}); },300);
+    }
+  }
+  window.addEventListener('keydown',activate,true);
+  window.addEventListener('pointerdown',activate,true);
+  window.addEventListener('click',e=>{ if(window._eatClick){ window._eatClick=false; e.preventDefault(); e.stopImmediatePropagation(); } },true);
+  window._fsArmed=()=>armed;
+  window._fsHint=hint;
+})();
+
 /* ===== modo passador: todas as ações por avançar/voltar ===== */
 (function(){
   const css=document.createElement('style');
@@ -1732,6 +1766,22 @@ body:focus{outline:none}
   addEventListener('focus',focusState); addEventListener('blur',focusState); setInterval(focusState,1000); focusState();
   paint();
 })();
+
+/* ===== autoplay ao abrir ===== */
+(function(){
+  function syncCine(){ document.body.classList.toggle('cine', !!window._introVid()); }
+  const _r=render; render=function(){ _r(); syncCine(); };
+  async function autoplay(){
+    const v=window._introVid(); if(!v) return;
+    syncCine();
+    try{ v.muted=false; await v.play(); }
+    catch(e){ try{ v.muted=true; await v.play(); }catch(e2){} }
+    if(window._fsArmed()) window._fsHint.classList.remove('off');
+    setTimeout(()=>window._fsHint.classList.add('off'),6000);
+  }
+  if(document.readyState==='complete') autoplay(); else addEventListener('load',autoplay);
+})();
+
 </script>
 
 
